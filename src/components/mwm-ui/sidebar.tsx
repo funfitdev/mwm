@@ -50,6 +50,7 @@ function SidebarProvider({
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
+        data-x-data={`{ sidebarOpen: ${defaultOpen} }`}
         style={
           {
             "--sidebar-width": SIDEBAR_WIDTH,
@@ -122,7 +123,7 @@ function Sidebar({
       {/* Desktop sidebar wrapper - contains spacer and fixed content */}
       <div
         data-slot="sidebar"
-        data-state="expanded"
+        data-x-bind="data-state:sidebarOpen ? 'expanded' : 'collapsed'"
         data-collapsible={collapsible}
         data-variant={variant}
         data-side={side}
@@ -200,36 +201,37 @@ function SidebarTrigger({ className, onClick, ...props }: SidebarTriggerProps) {
         <PanelLeftIcon className="size-4" />
         <span className="sr-only">Toggle Sidebar</span>
       </button>
-      {/* Desktop trigger - toggles checkbox */}
-      <label
-        htmlFor={`${sidebarId}-toggle`}
+      {/* Desktop trigger - toggles sidebar via Alpine.js */}
+      <button
+        type="button"
         data-sidebar="trigger"
         data-slot="sidebar-trigger-desktop"
+        data-x-on="click:sidebarOpen = !sidebarOpen"
         className={cn(
           "hidden size-7 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground md:inline-flex",
           className
         )}
+        {...props}
       >
         <PanelLeftIcon className="size-4" />
         <span className="sr-only">Toggle Sidebar</span>
-      </label>
+      </button>
     </>
   );
 }
 
 interface SidebarRailProps
-  extends React.LabelHTMLAttributes<HTMLLabelElement> {}
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
 
 function SidebarRail({ className, ...props }: SidebarRailProps) {
-  const { sidebarId } = useSidebar();
-
   return (
-    <label
-      htmlFor={`${sidebarId}-toggle`}
+    <button
+      type="button"
       data-sidebar="rail"
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
       title="Toggle Sidebar"
+      data-x-on="click:sidebarOpen = !sidebarOpen"
       className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-pointer transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
         "group-data-[side=left]:-right-4 group-data-[side=right]:left-0",
