@@ -16,7 +16,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>mwm App</title>
         <link rel="stylesheet" href="/styles.css" />
-        <script src="/bundle.js" />
+        <script src="/bundle.js" defer></script>
         {isDev && (
           <script dangerouslySetInnerHTML={{ __html: liveReloadScript }} />
         )}

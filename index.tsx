@@ -140,6 +140,13 @@ const server = Bun.serve({
           "Cache-Control": isDev ? "no-cache" : "public, max-age=31536000, immutable",
         },
       }),
+    "/bundle.js": () =>
+      new Response(Bun.file("./public/bundle.js"), {
+        headers: {
+          "Content-Type": "application/javascript",
+          "Cache-Control": isDev ? "no-cache" : "public, max-age=31536000, immutable",
+        },
+      }),
     // SSR route
     "/ssr": reactSSRHandler,
   },
