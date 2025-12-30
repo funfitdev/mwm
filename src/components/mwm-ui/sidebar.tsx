@@ -59,23 +59,11 @@ function SidebarProvider({
           } as React.CSSProperties
         }
         className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full",
-          "has-[[data-slot=sidebar-toggle]:checked]:*:data-[slot=sidebar]:*:data-[slot=sidebar-gap]:w-[--sidebar-width-icon]",
-          "has-[[data-slot=sidebar-toggle]:checked]:*:data-[slot=sidebar]:*:data-[slot=sidebar-container]:w-[--sidebar-width-icon]",
-          "has-[[data-slot=sidebar-toggle]:checked]:*:data-[slot=sidebar]:data-[collapsible=icon]:*:data-[slot=sidebar-container]:w-[--sidebar-width-icon]",
+          "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
           className
         )}
         {...props}
       >
-        {/* Hidden checkbox for toggle state on desktop */}
-        <input
-          type="checkbox"
-          id={`${sidebarId}-toggle`}
-          data-slot="sidebar-toggle"
-          className="peer/sidebar-toggle sr-only"
-          defaultChecked={!defaultOpen}
-          aria-label="Toggle sidebar"
-        />
         {children}
       </div>
     </SidebarContext.Provider>
@@ -103,7 +91,7 @@ function Sidebar({
       <div
         data-slot="sidebar"
         className={cn(
-          "bg-sidebar text-sidebar-foreground flex h-full w-[--sidebar-width] flex-col",
+          "bg-sidebar text-sidebar-foreground flex h-full w-[var(--sidebar-width)] flex-col",
           className
         )}
         {...props}
@@ -123,54 +111,50 @@ function Sidebar({
         data-sidebar="sidebar"
         data-side={side}
         className={cn(
-          "bg-sidebar text-sidebar-foreground fixed z-50 m-0 hidden h-dvh w-[--sidebar-width-mobile] max-h-none max-w-none flex-col p-0 md:hidden",
-          "[&:popover-open]:flex",
-          side === "left" ? "top-0 left-0 border-r" : "top-0 right-0 border-l"
+          "bg-sidebar text-sidebar-foreground fixed inset-0 z-50 m-0 h-dvh w-[var(--sidebar-width-mobile)] max-h-none max-w-none flex-col p-0",
+          "hidden [&:popover-open]:flex md:[&:popover-open]:hidden",
+          side === "left" ? "left-0 border-r" : "right-0 left-auto border-l"
         )}
       >
         <div className="flex h-full w-full flex-col">{children}</div>
       </div>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar wrapper - contains spacer and fixed content */}
       <div
-        className="group peer text-sidebar-foreground hidden md:block"
+        data-slot="sidebar"
+        data-state="expanded"
         data-collapsible={collapsible}
         data-variant={variant}
         data-side={side}
-        data-slot="sidebar"
+        className="group peer hidden md:block"
       >
-        {/* Sidebar gap for layout */}
+        {/* Spacer to reserve space in flex layout */}
         <div
-          data-slot="sidebar-gap"
+          data-slot="sidebar-spacer"
           className={cn(
-            "relative w-[--sidebar-width] bg-transparent transition-[width] duration-200 ease-linear",
-            collapsible === "offcanvas" &&
-              "peer-has-[[data-slot=sidebar-toggle]:checked]/sidebar-wrapper:w-0",
+            "relative h-svh w-[var(--sidebar-width)] bg-transparent transition-[width] duration-200 ease-linear",
+            "group-data-[collapsible=offcanvas]:group-data-[state=collapsed]:w-0",
+            "group-data-[collapsible=icon]:group-data-[state=collapsed]:w-[var(--sidebar-width-icon)]",
             side === "right" && "rotate-180",
-            (variant === "floating" || variant === "inset") &&
-              "peer-has-[[data-slot=sidebar-toggle]:checked]/sidebar-wrapper:w-[calc(var(--sidebar-width-icon)+1rem)]"
+            variant === "floating" || variant === "inset"
+              ? "group-data-[collapsible=icon]:group-data-[state=collapsed]:w-[calc(var(--sidebar-width-icon)+theme(spacing.4))]"
+              : ""
           )}
         />
+
+        {/* Fixed positioned content */}
         <div
           data-slot="sidebar-container"
           className={cn(
-            "fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex",
-            side === "left"
-              ? cn(
-                  "left-0",
-                  collapsible === "offcanvas" &&
-                    "peer-has-[[data-slot=sidebar-toggle]:checked]/sidebar-wrapper:-left-[--sidebar-width]"
-                )
-              : cn(
-                  "right-0",
-                  collapsible === "offcanvas" &&
-                    "peer-has-[[data-slot=sidebar-toggle]:checked]/sidebar-wrapper:-right-[--sidebar-width]"
-                ),
+            "bg-sidebar text-sidebar-foreground fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] flex-col transition-[left,right,width] duration-200 ease-linear md:flex",
+            side === "left" ? "left-0" : "right-0",
+            "group-data-[collapsible=offcanvas]:group-data-[state=collapsed]:left-[calc(var(--sidebar-width)*-1)]",
+            "group-data-[collapsible=icon]:group-data-[state=collapsed]:w-[var(--sidebar-width-icon)]",
             variant === "floating" || variant === "inset"
-              ? "p-2"
-              : cn(
-                  side === "left" ? "border-r" : "border-l"
-                ),
+              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+theme(spacing.4)+2px)]"
+              : side === "left"
+                ? "border-r"
+                : "border-l",
             className
           )}
           {...props}
@@ -179,9 +163,10 @@ function Sidebar({
             data-sidebar="sidebar"
             data-slot="sidebar-inner"
             className={cn(
-              "bg-sidebar flex h-full w-full flex-col",
-              variant === "floating" &&
-                "border-sidebar-border rounded-lg border shadow-sm"
+              "flex h-full w-full flex-col",
+              variant === "floating" || variant === "inset"
+                ? "bg-sidebar border-sidebar-border overflow-hidden rounded-lg border shadow-sm"
+                : ""
             )}
           >
             {children}
@@ -262,7 +247,13 @@ function SidebarInset({ className, ...props }: SidebarInsetProps) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "bg-background relative flex w-full flex-1 flex-col",
+        "bg-background relative flex min-h-svh flex-1 flex-col",
+        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))]",
+        "md:peer-data-[variant=inset]:m-2",
+        "md:peer-data-[variant=inset]:ml-0",
+        "md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2",
+        "md:peer-data-[variant=inset]:rounded-xl",
+        "md:peer-data-[variant=inset]:shadow",
         className
       )}
       {...props}
@@ -460,6 +451,7 @@ interface SidebarMenuButtonProps
     VariantProps<typeof sidebarMenuButtonVariants> {
   isActive?: boolean;
   asChild?: boolean;
+  tooltip?: string;
 }
 
 function SidebarMenuButton({
@@ -467,22 +459,26 @@ function SidebarMenuButton({
   isActive = false,
   variant = "default",
   size = "default",
+  tooltip,
   className,
   children,
   ...props
 }: SidebarMenuButtonProps) {
+  const Comp = asChild ? "span" : "button";
+
   return (
-    <button
-      type="button"
+    <Comp
+      type={asChild ? undefined : "button"}
       data-slot="sidebar-menu-button"
       data-sidebar="menu-button"
       data-size={size}
       data-active={isActive}
+      title={tooltip}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
       {...props}
     >
       {children}
-    </button>
+    </Comp>
   );
 }
 

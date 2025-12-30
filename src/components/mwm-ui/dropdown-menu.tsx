@@ -33,33 +33,45 @@ function DropdownMenu({ children }: DropdownMenuProps) {
 }
 
 interface DropdownMenuTriggerProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  asChild?: boolean;
+}
 
 function DropdownMenuTrigger({
   className,
   children,
+  asChild = false,
   ...props
 }: DropdownMenuTriggerProps) {
   const { menuId } = useDropdownMenuContext();
 
+  const Comp = asChild ? "span" : "button";
+
   return (
-    <button
-      type="button"
+    <Comp
+      type={asChild ? undefined : "button"}
       data-slot="dropdown-menu-trigger"
       popoverTarget={menuId}
       className={className}
       {...props}
     >
       {children}
-    </button>
+    </Comp>
   );
 }
 
-interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  sideOffset?: number;
+  side?: "top" | "right" | "bottom" | "left";
+  align?: "start" | "center" | "end";
+}
 
 function DropdownMenuContent({
   className,
   children,
+  sideOffset: _sideOffset,
+  side: _side,
+  align: _align,
   ...props
 }: DropdownMenuContentProps) {
   const { menuId } = useDropdownMenuContext();

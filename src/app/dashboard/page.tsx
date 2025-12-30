@@ -3,7 +3,7 @@ import { SectionCards } from "@/components/section-cards";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/mwm-ui/sidebar";
 
-export default function UsersPage() {
+export default function Page() {
   return (
     <SidebarProvider
       style={

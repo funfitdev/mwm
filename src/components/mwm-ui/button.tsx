@@ -37,16 +37,22 @@ const buttonVariants = cva(
 
 interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+}
 
 function Button({
   className,
   variant = "default",
   size = "default",
+  asChild = false,
   ...props
 }: ButtonProps) {
+  const Comp = asChild ? "span" : "button";
+
   return (
-    <button
+    <Comp
+      type={asChild ? undefined : "button"}
       data-slot="button"
       data-variant={variant}
       data-size={size}
