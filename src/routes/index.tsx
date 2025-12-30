@@ -14,7 +14,7 @@ export default function HomePage() {
         This is the root route at <code>/</code>
       </p>
 
-      <div className="mt-8 max-w-md">
+      <div className="mt-8">
         <h2 className="mb-4 text-lg font-semibold">FAQ</h2>
         <Accordion type="single">
           <AccordionItem value="item-1">
