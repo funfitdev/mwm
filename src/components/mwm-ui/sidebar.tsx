@@ -426,7 +426,7 @@ function SidebarMenuItem({ className, ...props }: SidebarMenuItemProps) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>a]:flex [&>a]:w-full [&>a]:items-center [&>a]:gap-2",
   {
     variants: {
       variant: {
@@ -466,21 +466,28 @@ function SidebarMenuButton({
   children,
   ...props
 }: SidebarMenuButtonProps) {
-  const Comp = asChild ? "span" : "button";
+  const buttonProps = {
+    "data-slot": "sidebar-menu-button",
+    "data-sidebar": "menu-button",
+    "data-size": size,
+    "data-active": isActive,
+    title: tooltip,
+    className: cn(sidebarMenuButtonVariants({ variant, size }), className),
+    ...props,
+  };
+
+  if (asChild) {
+    return (
+      <span {...buttonProps}>
+        {children}
+      </span>
+    );
+  }
 
   return (
-    <Comp
-      type={asChild ? undefined : "button"}
-      data-slot="sidebar-menu-button"
-      data-sidebar="menu-button"
-      data-size={size}
-      data-active={isActive}
-      title={tooltip}
-      className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-      {...props}
-    >
+    <button type="button" {...buttonProps}>
       {children}
-    </Comp>
+    </button>
   );
 }
 

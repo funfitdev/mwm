@@ -3,32 +3,19 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-interface DropdownMenuContextValue {
-  menuId: string;
-}
-
-const DropdownMenuContext = React.createContext<DropdownMenuContextValue | null>(null);
-
-function useDropdownMenuContext() {
-  const context = React.useContext(DropdownMenuContext);
-  if (!context) {
-    throw new Error("DropdownMenu components must be used within a DropdownMenu");
-  }
-  return context;
-}
-
-interface DropdownMenuProps {
+interface DropdownMenuProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-function DropdownMenu({ children }: DropdownMenuProps) {
-  const id = React.useId();
-  const menuId = `dropdown${id.replace(/:/g, "")}`;
-
+function DropdownMenu({ children, className, ...props }: DropdownMenuProps) {
   return (
-    <DropdownMenuContext.Provider value={{ menuId }}>
+    <div
+      data-slot="dropdown-menu"
+      className={cn("relative", className)}
+      {...props}
+    >
       {children}
-    </DropdownMenuContext.Provider>
+    </div>
   );
 }
 
@@ -43,20 +30,30 @@ function DropdownMenuTrigger({
   asChild = false,
   ...props
 }: DropdownMenuTriggerProps) {
-  const { menuId } = useDropdownMenuContext();
+  const triggerProps = {
+    "data-slot": "dropdown-menu-trigger",
+    "aria-expanded": false as boolean,
+    "aria-haspopup": "menu" as const,
+    className,
+    ...props,
+  };
 
-  const Comp = asChild ? "span" : "button";
+  if (asChild) {
+    const child = React.Children.only(children);
+    if (React.isValidElement(child)) {
+      const childProps = child.props as any;
+      return React.cloneElement(child as React.ReactElement<any>, {
+        ...triggerProps,
+        className: cn(childProps.className, className),
+      });
+    }
+    return children;
+  }
 
   return (
-    <Comp
-      type={asChild ? undefined : "button"}
-      data-slot="dropdown-menu-trigger"
-      popoverTarget={menuId}
-      className={className}
-      {...props}
-    >
+    <button type="button" {...triggerProps}>
       {children}
-    </Comp>
+    </button>
   );
 }
 
@@ -69,23 +66,27 @@ interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> 
 function DropdownMenuContent({
   className,
   children,
-  sideOffset: _sideOffset,
-  side: _side,
-  align: _align,
+  sideOffset = 4,
+  side = "bottom",
+  align = "start",
   ...props
 }: DropdownMenuContentProps) {
-  const { menuId } = useDropdownMenuContext();
-
   return (
     <div
-      id={menuId}
-      popover="auto"
       data-slot="dropdown-menu-content"
+      data-side={side}
+      data-align={align}
+      data-side-offset={sideOffset}
+      data-state="closed"
+      role="menu"
       className={cn(
-        "bg-popover text-popover-foreground z-50 m-0 hidden min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md",
-        "[&:popover-open]:block",
+        "bg-popover text-popover-foreground absolute z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
+      style={{ display: 'none' }}
       {...props}
     >
       {children}
@@ -120,16 +121,14 @@ function DropdownMenuItem({
   closeOnClick = true,
   ...props
 }: DropdownMenuItemProps) {
-  const { menuId } = useDropdownMenuContext();
-
   return (
     <button
       type="button"
       data-slot="dropdown-menu-item"
-      data-inset={inset}
+      data-inset={inset ? "" : undefined}
       data-variant={variant}
-      popoverTarget={closeOnClick ? menuId : undefined}
-      popoverTargetAction={closeOnClick ? "hide" : undefined}
+      data-close-on-click={closeOnClick ? undefined : "false"}
+      role="menuitem"
       className={cn(
         "focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
@@ -142,14 +141,14 @@ function DropdownMenuItem({
 interface DropdownMenuCheckboxItemProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   checked?: boolean;
-  onCheckedChange?: (checked: boolean) => void;
+  closeOnClick?: boolean;
 }
 
 function DropdownMenuCheckboxItem({
   className,
   children,
   checked,
-  onCheckedChange,
+  closeOnClick = true,
   ...props
 }: DropdownMenuCheckboxItemProps) {
   return (
@@ -157,7 +156,9 @@ function DropdownMenuCheckboxItem({
       type="button"
       data-slot="dropdown-menu-checkbox-item"
       data-checked={checked ? "" : undefined}
-      onClick={() => onCheckedChange?.(!checked)}
+      data-close-on-click={closeOnClick ? undefined : "false"}
+      role="menuitemcheckbox"
+      aria-checked={checked}
       className={cn(
         "focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
@@ -174,54 +175,46 @@ function DropdownMenuCheckboxItem({
 
 interface DropdownMenuRadioGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   value?: string;
-  onValueChange?: (value: string) => void;
 }
 
-const DropdownMenuRadioGroupContext = React.createContext<{
-  value?: string;
-  onValueChange?: (value: string) => void;
-} | null>(null);
-
 function DropdownMenuRadioGroup({
-  value,
-  onValueChange,
   className,
   ...props
 }: DropdownMenuRadioGroupProps) {
   return (
-    <DropdownMenuRadioGroupContext.Provider value={{ value, onValueChange }}>
-      <div
-        data-slot="dropdown-menu-radio-group"
-        role="radiogroup"
-        className={className}
-        {...props}
-      />
-    </DropdownMenuRadioGroupContext.Provider>
+    <div
+      data-slot="dropdown-menu-radio-group"
+      role="radiogroup"
+      className={className}
+      {...props}
+    />
   );
 }
 
 interface DropdownMenuRadioItemProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   value: string;
+  checked?: boolean;
+  closeOnClick?: boolean;
 }
 
 function DropdownMenuRadioItem({
   className,
   children,
-  value: itemValue,
+  value,
+  checked,
+  closeOnClick = true,
   ...props
 }: DropdownMenuRadioItemProps) {
-  const context = React.useContext(DropdownMenuRadioGroupContext);
-  const isSelected = context?.value === itemValue;
-
   return (
     <button
       type="button"
       data-slot="dropdown-menu-radio-item"
-      data-checked={isSelected ? "" : undefined}
+      data-value={value}
+      data-checked={checked ? "" : undefined}
+      data-close-on-click={closeOnClick ? undefined : "false"}
       role="menuitemradio"
-      aria-checked={isSelected}
-      onClick={() => context?.onValueChange?.(itemValue)}
+      aria-checked={checked}
       className={cn(
         "focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
@@ -229,7 +222,7 @@ function DropdownMenuRadioItem({
       {...props}
     >
       <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
-        {isSelected && <CircleIcon className="size-2 fill-current" />}
+        {checked && <CircleIcon className="size-2 fill-current" />}
       </span>
       {children}
     </button>
@@ -248,7 +241,7 @@ function DropdownMenuLabel({
   return (
     <div
       data-slot="dropdown-menu-label"
-      data-inset={inset}
+      data-inset={inset ? "" : undefined}
       className={cn(
         "px-2 py-1.5 text-sm font-medium data-[inset]:pl-8",
         className
@@ -292,20 +285,19 @@ function DropdownMenuShortcut({
   );
 }
 
-// Sub-menu using details/summary for nested menus
-interface DropdownMenuSubProps extends React.HTMLAttributes<HTMLDetailsElement> {}
+interface DropdownMenuSubProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 function DropdownMenuSub({ className, ...props }: DropdownMenuSubProps) {
   return (
-    <details
+    <div
       data-slot="dropdown-menu-sub"
-      className={cn("group/sub relative", className)}
+      className={cn("relative", className)}
       {...props}
     />
   );
 }
 
-interface DropdownMenuSubTriggerProps extends React.HTMLAttributes<HTMLElement> {
+interface DropdownMenuSubTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   inset?: boolean;
 }
 
@@ -316,34 +308,47 @@ function DropdownMenuSubTrigger({
   ...props
 }: DropdownMenuSubTriggerProps) {
   return (
-    <summary
+    <button
+      type="button"
       data-slot="dropdown-menu-sub-trigger"
-      data-inset={inset}
+      data-inset={inset ? "" : undefined}
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground group-open/sub:bg-accent group-open/sub:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex cursor-default list-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&::-webkit-details-marker]:hidden",
+        "focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
     >
       {children}
       <ChevronRightIcon className="ml-auto size-4" />
-    </summary>
+    </button>
   );
 }
 
-interface DropdownMenuSubContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+interface DropdownMenuSubContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  sideOffset?: number;
+}
 
 function DropdownMenuSubContent({
   className,
+  sideOffset = 4,
   ...props
 }: DropdownMenuSubContentProps) {
   return (
     <div
       data-slot="dropdown-menu-sub-content"
+      data-side="right"
+      data-align="start"
+      data-side-offset={sideOffset}
+      data-state="closed"
+      role="menu"
       className={cn(
-        "bg-popover text-popover-foreground absolute top-0 left-full z-50 ml-1 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-lg",
+        "bg-popover text-popover-foreground absolute z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-lg",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
+      style={{ display: 'none' }}
       {...props}
     />
   );
