@@ -5,7 +5,7 @@ export default function EditUserPage() {
 
   return (
     <div>
-      <h1>Edit User</h1>
+      <h1>QQEdit User</h1>
       <p>
         Form to edit user with ID: <code>{id}</code>
       </p>

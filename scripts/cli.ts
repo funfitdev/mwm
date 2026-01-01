@@ -9,10 +9,23 @@ async function generateRoutes() {
   const glob = new Glob("**/*.tsx");
   const routesDir = import.meta.dir + "/../src/routes";
 
-  const routes: { path: string; importPath: string }[] = [];
+  const routes: { path: string; importPath: string; layouts: string[] }[] = [];
+  const layouts: Map<string, string> = new Map(); // directory path -> import path
 
+  // First pass: collect all layout files
   for await (const file of glob.scan(routesDir)) {
+    if (file.endsWith("_layout.tsx")) {
+      // Get the directory this layout applies to
+      const dir = file.replace(/\/?_layout\.tsx$/, "") || "";
+      layouts.set(dir, `./routes/${file.replace(/\.tsx$/, "")}`);
+    }
+  }
+
+  // Second pass: collect routes and their applicable layouts
+  for await (const file of glob.scan(routesDir)) {
+    // Skip special files
     if (file.startsWith("__")) continue;
+    if (file.endsWith("_layout.tsx")) continue;
 
     let route = file.replace(/\.tsx$/, "");
 
@@ -27,19 +40,61 @@ async function generateRoutes() {
     // Convert $param to :param for dynamic route segments
     route = route.replace(/\/\$([^/]+)/g, "/:$1");
 
+    // Find all layouts that apply to this route (from root to deepest)
+    const fileDir = file.includes("/") ? file.substring(0, file.lastIndexOf("/")) : "";
+    const applicableLayouts: string[] = [];
+
+    // Check each parent directory for a layout
+    const parts = fileDir.split("/").filter(Boolean);
+    let currentDir = "";
+
+    // Check root layout first
+    if (layouts.has("")) {
+      applicableLayouts.push(layouts.get("")!);
+    }
+
+    // Then check each nested directory
+    for (const part of parts) {
+      currentDir = currentDir ? `${currentDir}/${part}` : part;
+      if (layouts.has(currentDir)) {
+        applicableLayouts.push(layouts.get(currentDir)!);
+      }
+    }
+
     routes.push({
       path: route,
       importPath: `./routes/${file.replace(/\.tsx$/, "")}`,
+      layouts: applicableLayouts,
     });
   }
 
   routes.sort((a, b) => a.path.localeCompare(b.path));
 
+  // Collect all unique layout imports
+  const allLayouts = new Set<string>();
+  for (const r of routes) {
+    for (const layout of r.layouts) {
+      allLayouts.add(layout);
+    }
+  }
+  const layoutImports = Array.from(allLayouts);
+
   const imports = routes
     .map((r, i) => `import * as Route${i} from "${r.importPath}";`)
     .join("\n");
+
+  const layoutImportsCode = layoutImports
+    .map((l, i) => `import Layout${i} from "${l}";`)
+    .join("\n");
+
+  // Create a map from import path to Layout variable name
+  const layoutVarMap = new Map(layoutImports.map((l, i) => [l, `Layout${i}`]));
+
   const routeEntries = routes
-    .map((r, i) => `  "${r.path}": createRouteHandler(Route${i}),`)
+    .map((r, i) => {
+      const layoutVars = r.layouts.map((l) => layoutVarMap.get(l)!);
+      return `  "${r.path}": createRouteHandler(Route${i}, [${layoutVars.join(", ")}]),`;
+    })
     .join("\n");
 
   const content = `// Auto-generated - do not edit
@@ -51,9 +106,13 @@ import {
   type RequestContext,
   type AuthSession,
 } from "./context";
+import { OutletProvider } from "./outlet";
 
 // Import route modules
 ${imports}
+
+// Import layout modules
+${layoutImportsCode}
 
 // HTTP method handler type
 type MethodHandler = (req: Request) => Response | React.ReactElement | Promise<Response | React.ReactElement>;
@@ -66,6 +125,9 @@ type RouteModule = {
   PUT?: MethodHandler;
   DELETE?: MethodHandler;
 };
+
+// Layout component type
+type LayoutComponent = React.ComponentType;
 
 // Bun route handler type
 type BunRouteHandler =
@@ -110,12 +172,42 @@ function isPartialRequest(req: Request): boolean {
   );
 }
 
+// Wrap content with layouts (innermost to outermost)
+function wrapWithLayouts(
+  content: React.ReactElement,
+  layouts: LayoutComponent[]
+): React.ReactElement {
+  let wrapped = content;
+  // Apply layouts from innermost (last) to outermost (first)
+  for (let i = layouts.length - 1; i >= 0; i--) {
+    const Layout = layouts[i]!;
+    wrapped = (
+      <OutletProvider content={wrapped}>
+        <Layout />
+      </OutletProvider>
+    );
+  }
+  return wrapped;
+}
+
 // Render a React component to a Response
 async function renderComponent(
   Component: React.ComponentType,
-  partial: boolean
+  partial: boolean,
+  layouts: LayoutComponent[] = []
 ): Promise<Response> {
-  const element = partial ? <Component /> : <Root><Component /></Root>;
+  let element: React.ReactElement = <Component />;
+
+  // Wrap with layouts if any
+  if (layouts.length > 0) {
+    element = wrapWithLayouts(element, layouts);
+  }
+
+  // Wrap with Root for full page requests
+  if (!partial) {
+    element = <Root>{element}</Root>;
+  }
+
   const stream = await renderToReadableStream(element);
   return new Response(stream, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -130,7 +222,10 @@ function isReactComponent(
 }
 
 // Create a route handler that supports all HTTP methods
-function createRouteHandler(module: RouteModule): BunRouteHandler {
+function createRouteHandler(
+  module: RouteModule,
+  layouts: LayoutComponent[] = []
+): BunRouteHandler {
   const hasMethodExports = module.GET || module.POST || module.PUT || module.DELETE;
 
   // If only default export exists, use simple handler
@@ -139,7 +234,7 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
       const ctx = await createRequestContext(req);
       return runWithContext(ctx, async () => {
         const partial = isPartialRequest(req);
-        return renderComponent(module.default!, partial);
+        return renderComponent(module.default!, partial, layouts);
       });
     };
   }
@@ -157,30 +252,30 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
         // If partial request and GET export exists, use it
         if (partial && module.GET) {
           if (isReactComponent(module.GET)) {
-            return renderComponent(module.GET, true);
+            return renderComponent(module.GET, true, layouts);
           }
           const result = await module.GET(req);
           if (result instanceof Response) {
             return result;
           }
-          return renderComponent(() => result, true);
+          return renderComponent(() => result, true, layouts);
         }
 
         // Full page request - use default export
         if (module.default) {
-          return renderComponent(module.default, false);
+          return renderComponent(module.default, false, layouts);
         }
 
         // Fallback to GET if no default
         if (module.GET) {
           if (isReactComponent(module.GET)) {
-            return renderComponent(module.GET, partial);
+            return renderComponent(module.GET, partial, layouts);
           }
           const result = await module.GET(req);
           if (result instanceof Response) {
             return result;
           }
-          return renderComponent(() => result, partial);
+          return renderComponent(() => result, partial, layouts);
         }
 
         return new Response("Not Found", { status: 404 });
@@ -198,7 +293,7 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
           return result;
         }
         // Result is a React element, render it as partial
-        return renderComponent(() => result, true);
+        return renderComponent(() => result, true, layouts);
       });
     };
   }
@@ -213,7 +308,7 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
           return result;
         }
         // Result is a React element, render it as partial
-        return renderComponent(() => result, true);
+        return renderComponent(() => result, true, layouts);
       });
     };
   }
@@ -228,7 +323,7 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
           return result;
         }
         // Result is a React element, render it as partial
-        return renderComponent(() => result, true);
+        return renderComponent(() => result, true, layouts);
       });
     };
   }
