@@ -4,7 +4,7 @@ import { resolve } from "path";
 
 const projectRoot = resolve(import.meta.dir, "..");
 
-// Generate routes
+// Generate routes with full routing logic (context, HTTP methods, partials)
 async function generateRoutes() {
   const glob = new Glob("**/*.tsx");
   const routesDir = import.meta.dir + "/../src/routes";
@@ -33,38 +33,202 @@ async function generateRoutes() {
   routes.sort((a, b) => a.path.localeCompare(b.path));
 
   const imports = routes
-    .map((r, i) => `import Route${i} from "${r.importPath}";`)
+    .map((r, i) => `import * as Route${i} from "${r.importPath}";`)
     .join("\n");
   const routeEntries = routes
-    .map((r, i) => `  "${r.path}": createSSRHandler(Route${i}),`)
+    .map((r, i) => `  "${r.path}": createRouteHandler(Route${i}),`)
     .join("\n");
 
   const content = `// Auto-generated - do not edit
 import { renderToReadableStream } from "react-dom/server";
 import Root from "./routes/__Root";
+import {
+  runWithContext,
+  createGuestSession,
+  type RequestContext,
+  type AuthSession,
+} from "./context";
+
+// Import route modules
 ${imports}
 
-function createSSRHandler(Component: React.ComponentType) {
-  return async (_req: Request): Promise<Response> => {
-    const stream = await renderToReadableStream(
-      <Root>
-        <Component />
-      </Root>
-    );
-    return new Response(stream, {
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
-  };
+// HTTP method handler type
+type MethodHandler = (req: Request) => Response | Promise<Response>;
+
+// Route module type
+type RouteModule = {
+  default?: React.ComponentType;
+  GET?: React.ComponentType | MethodHandler;
+  POST?: MethodHandler;
+  PUT?: MethodHandler;
+  DELETE?: MethodHandler;
+};
+
+// Bun route handler type
+type BunRouteHandler =
+  | ((req: Request) => Response | Promise<Response>)
+  | {
+      GET?: (req: Request) => Response | Promise<Response>;
+      POST?: (req: Request) => Response | Promise<Response>;
+      PUT?: (req: Request) => Response | Promise<Response>;
+      DELETE?: (req: Request) => Response | Promise<Response>;
+    };
+
+// Get auth session from request (implement your actual auth logic here)
+async function getAuthSession(_req: Request): Promise<AuthSession> {
+  // TODO: Implement actual session lookup from cookies/headers
+  // Example:
+  // const sessionToken = req.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
+  // if (sessionToken) {
+  //   const session = await prisma.session.findUnique({ where: { token: sessionToken }, include: { user: true } });
+  //   if (session && session.expiresAt > new Date()) {
+  //     return { userId: session.userId, user: session.user, isAuthenticated: true };
+  //   }
+  // }
+  return createGuestSession();
 }
 
-export const routes: Record<string, (req: Request) => Promise<Response>> = {
+// Create request context for a request
+async function createRequestContext(
+  req: Request,
+  params: Record<string, string> = {}
+): Promise<RequestContext> {
+  const url = new URL(req.url);
+  const session = await getAuthSession(req);
+  return { request: req, url, params, searchParams: url.searchParams, session };
+}
+
+// Check if request wants partial content (HTMX or ?partial=yes)
+function isPartialRequest(req: Request): boolean {
+  const url = new URL(req.url);
+  return (
+    url.searchParams.get("partial") === "yes" ||
+    req.headers.get("HX-Request") === "true"
+  );
+}
+
+// Render a React component to a Response
+async function renderComponent(
+  Component: React.ComponentType,
+  partial: boolean
+): Promise<Response> {
+  const element = partial ? <Component /> : <Root><Component /></Root>;
+  const stream = await renderToReadableStream(element);
+  return new Response(stream, {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+// Check if a handler is a React component (no parameters)
+function isReactComponent(
+  handler: React.ComponentType | MethodHandler
+): handler is React.ComponentType {
+  return typeof handler === "function" && handler.length === 0;
+}
+
+// Create a route handler that supports all HTTP methods
+function createRouteHandler(module: RouteModule): BunRouteHandler {
+  const hasMethodExports = module.GET || module.POST || module.PUT || module.DELETE;
+
+  // If only default export exists, use simple handler
+  if (!hasMethodExports && module.default) {
+    return async (req: Request): Promise<Response> => {
+      const ctx = await createRequestContext(req);
+      return runWithContext(ctx, async () => {
+        const partial = isPartialRequest(req);
+        return renderComponent(module.default!, partial);
+      });
+    };
+  }
+
+  // Build method handlers object
+  const handlers: Record<string, (req: Request) => Promise<Response>> = {};
+
+  // GET handler: default export for full page, GET export for partials
+  if (module.default || module.GET) {
+    handlers.GET = async (req: Request): Promise<Response> => {
+      const ctx = await createRequestContext(req);
+      return runWithContext(ctx, async () => {
+        const partial = isPartialRequest(req);
+
+        // If partial request and GET export exists, use it
+        if (partial && module.GET) {
+          if (isReactComponent(module.GET)) {
+            return renderComponent(module.GET, true);
+          }
+          return module.GET(req);
+        }
+
+        // Full page request - use default export
+        if (module.default) {
+          return renderComponent(module.default, false);
+        }
+
+        // Fallback to GET if no default
+        if (module.GET) {
+          if (isReactComponent(module.GET)) {
+            return renderComponent(module.GET, partial);
+          }
+          return module.GET(req);
+        }
+
+        return new Response("Not Found", { status: 404 });
+      });
+    };
+  }
+
+  // POST handler
+  if (module.POST) {
+    handlers.POST = async (req: Request): Promise<Response> => {
+      const ctx = await createRequestContext(req);
+      return runWithContext(ctx, () => module.POST!(req));
+    };
+  }
+
+  // PUT handler
+  if (module.PUT) {
+    handlers.PUT = async (req: Request): Promise<Response> => {
+      const ctx = await createRequestContext(req);
+      return runWithContext(ctx, () => module.PUT!(req));
+    };
+  }
+
+  // DELETE handler
+  if (module.DELETE) {
+    handlers.DELETE = async (req: Request): Promise<Response> => {
+      const ctx = await createRequestContext(req);
+      return runWithContext(ctx, () => module.DELETE!(req));
+    };
+  }
+
+  return handlers;
+}
+
+export const routes: Record<string, BunRouteHandler> = {
 ${routeEntries}
 };
 
 export async function handleUIRoutes(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
   const handler = routes[url.pathname];
-  return handler ? handler(req) : null;
+
+  if (!handler) return null;
+
+  // If handler is a function, call it directly
+  if (typeof handler === "function") {
+    return handler(req);
+  }
+
+  // Handler is an object with method handlers
+  const method = req.method as keyof typeof handler;
+  const methodHandler = handler[method];
+
+  if (methodHandler) {
+    return methodHandler(req);
+  }
+
+  // Method not allowed
+  return new Response("Method Not Allowed", { status: 405 });
 }
 `;
 

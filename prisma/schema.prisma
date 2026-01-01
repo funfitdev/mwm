@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -25,20 +25,28 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Authentication
-  accounts      Account[]
-  sessions      Session[]
-  credentials   Credential?
+  accounts    Account[]
+  sessions    Session[]
+  credentials Credential?
 
   // Authorization
-  userRoles     UserRole[]
+  userRoles UserRole[]
 
   // Multi-tenancy
-  memberships   OrganizationMember[]
-  ownedOrgs     Organization[]       @relation("OrgOwner")
+  memberships OrganizationMember[]
+  ownedOrgs   Organization[]       @relation("OrgOwner")
 
   // Security
-  auditLogs     AuditLog[]
-  apiKeys       ApiKey[]
+  auditLogs AuditLog[]
+  apiKeys   ApiKey[]
+
+  // Audit trails (createdBy/updatedBy relations)
+  createdRoles             Role[]               @relation("RoleCreatedBy")
+  updatedRoles             Role[]               @relation("RoleUpdatedBy")
+  createdPermissions       Permission[]         @relation("PermissionCreatedBy")
+  updatedPermissions       Permission[]         @relation("PermissionUpdatedBy")
+  createdOrgMembers        OrganizationMember[] @relation("OrgMemberCreatedBy")
+  updatedOrgMembers        OrganizationMember[] @relation("OrgMemberUpdatedBy")
 
   @@index([email])
   @@index([username])
@@ -58,7 +66,7 @@ model Credential {
 model Account {
   id                String   @id @default(cuid())
   userId            String
-  provider          String   // e.g., "google", "github", "facebook"
+  provider          String // e.g., "google", "github", "facebook"
   providerAccountId String
   accessToken       String?
   refreshToken      String?
@@ -93,12 +101,12 @@ model Session {
 }
 
 model VerificationToken {
-  id         String              @id @default(cuid())
-  identifier String              // email or phone
-  token      String              @unique
+  id         String                @id @default(cuid())
+  identifier String // email or phone
+  token      String                @unique
   type       VerificationTokenType
   expiresAt  DateTime
-  createdAt  DateTime            @default(now())
+  createdAt  DateTime              @default(now())
 
   @@unique([identifier, type])
   @@index([token])
@@ -121,9 +129,13 @@ model Role {
   displayName String
   description String?
   isSystem    Boolean  @default(false) // System roles can't be deleted
+  createdBy   String?
+  updatedBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  creator     User?    @relation("RoleCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater     User?    @relation("RoleUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
   permissions RolePermission[]
   userRoles   UserRole[]
   orgRoles    OrganizationRole[]
@@ -136,11 +148,15 @@ model Permission {
   name        String   @unique // e.g., "users:read", "posts:write", "orders:delete"
   displayName String
   description String?
-  resource    String   // e.g., "users", "posts", "orders"
-  action      String   // e.g., "create", "read", "update", "delete", "manage"
+  resource    String // e.g., "users", "posts", "orders"
+  action      String // e.g., "create", "read", "update", "delete", "manage"
+  createdBy   String?
+  updatedBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  creator         User?            @relation("PermissionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater         User?            @relation("PermissionUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
   rolePermissions RolePermission[]
 
   @@unique([resource, action])
@@ -178,17 +194,17 @@ model UserRole {
 // =============================================================================
 
 model Organization {
-  id          String           @id @default(cuid())
+  id          String             @id @default(cuid())
   name        String
-  slug        String           @unique
+  slug        String             @unique
   description String?
   logoUrl     String?
   website     String?
   ownerId     String
   status      OrganizationStatus @default(ACTIVE)
-  settings    Json?            // Flexible org-level settings
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  settings    Json? // Flexible org-level settings
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   owner   User                 @relation("OrgOwner", fields: [ownerId], references: [id])
   members OrganizationMember[]
@@ -209,11 +225,15 @@ model OrganizationMember {
   id        String   @id @default(cuid())
   orgId     String
   userId    String
+  createdBy String?
+  updatedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creator      User?              @relation("OrgMemberCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?              @relation("OrgMemberUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
   roles        OrganizationRole[] @relation("MemberRoles")
 
   @@unique([orgId, userId])
@@ -239,7 +259,7 @@ model OrganizationInvite {
   id        String       @id @default(cuid())
   orgId     String
   email     String
-  roleId    String?      // Role to assign on acceptance
+  roleId    String? // Role to assign on acceptance
   token     String       @unique
   status    InviteStatus @default(PENDING)
   expiresAt DateTime
@@ -265,17 +285,17 @@ enum InviteStatus {
 // =============================================================================
 
 model ApiKey {
-  id           String    @id @default(cuid())
-  userId       String
-  name         String
-  keyHash      String    @unique // Store hashed version of the key
-  keyPrefix    String    // First 8 chars for identification, e.g., "mwm_live_"
-  permissions  String[]  // Array of permission names
-  lastUsedAt   DateTime?
-  expiresAt    DateTime?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  keyHash     String    @unique // Store hashed version of the key
+  keyPrefix   String // First 8 chars for identification, e.g., "mwm_live_"
+  permissions String[] // Array of permission names
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -291,10 +311,10 @@ model ApiKey {
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?
-  action     String   // e.g., "user.login", "user.logout", "role.assigned"
-  resource   String?  // e.g., "User", "Organization"
+  action     String // e.g., "user.login", "user.logout", "role.assigned"
+  resource   String? // e.g., "User", "Organization"
   resourceId String?
-  metadata   Json?    // Additional context
+  metadata   Json? // Additional context
   ipAddress  String?
   userAgent  String?
   status     String   @default("success") // "success", "failure"
