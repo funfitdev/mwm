@@ -53,7 +53,7 @@ import {
 ${imports}
 
 // HTTP method handler type
-type MethodHandler = (req: Request) => Response | Promise<Response>;
+type MethodHandler = (req: Request) => Response | React.ReactElement | Promise<Response | React.ReactElement>;
 
 // Route module type
 type RouteModule = {
@@ -156,7 +156,11 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
           if (isReactComponent(module.GET)) {
             return renderComponent(module.GET, true);
           }
-          return module.GET(req);
+          const result = await module.GET(req);
+          if (result instanceof Response) {
+            return result;
+          }
+          return renderComponent(() => result, true);
         }
 
         // Full page request - use default export
@@ -169,7 +173,11 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
           if (isReactComponent(module.GET)) {
             return renderComponent(module.GET, partial);
           }
-          return module.GET(req);
+          const result = await module.GET(req);
+          if (result instanceof Response) {
+            return result;
+          }
+          return renderComponent(() => result, partial);
         }
 
         return new Response("Not Found", { status: 404 });
@@ -181,7 +189,14 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
   if (module.POST) {
     handlers.POST = async (req: Request): Promise<Response> => {
       const ctx = await createRequestContext(req);
-      return runWithContext(ctx, () => module.POST!(req));
+      return runWithContext(ctx, async () => {
+        const result = await module.POST!(req);
+        if (result instanceof Response) {
+          return result;
+        }
+        // Result is a React element, render it as partial
+        return renderComponent(() => result, true);
+      });
     };
   }
 
@@ -189,7 +204,14 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
   if (module.PUT) {
     handlers.PUT = async (req: Request): Promise<Response> => {
       const ctx = await createRequestContext(req);
-      return runWithContext(ctx, () => module.PUT!(req));
+      return runWithContext(ctx, async () => {
+        const result = await module.PUT!(req);
+        if (result instanceof Response) {
+          return result;
+        }
+        // Result is a React element, render it as partial
+        return renderComponent(() => result, true);
+      });
     };
   }
 
@@ -197,7 +219,14 @@ function createRouteHandler(module: RouteModule): BunRouteHandler {
   if (module.DELETE) {
     handlers.DELETE = async (req: Request): Promise<Response> => {
       const ctx = await createRequestContext(req);
-      return runWithContext(ctx, () => module.DELETE!(req));
+      return runWithContext(ctx, async () => {
+        const result = await module.DELETE!(req);
+        if (result instanceof Response) {
+          return result;
+        }
+        // Result is a React element, render it as partial
+        return renderComponent(() => result, true);
+      });
     };
   }
 

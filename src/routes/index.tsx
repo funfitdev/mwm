@@ -83,6 +83,42 @@ export async function POST(req: Request) {
   }
 }
 
+function UserRow({ user }: { user: { id: string; email: string; isActive: boolean } }) {
+  return (
+    <div id={`user-${user.id}`} className="user-row flex items-center gap-2">
+      <span>{user.email}</span>
+      <label className="flex items-center gap-1">
+        <input
+          type="checkbox"
+          defaultChecked={user.isActive}
+          hx-put="/"
+          hx-vals={JSON.stringify({ userId: user.id, isActive: !user.isActive })}
+          hx-target={`#user-${user.id}`}
+          hx-swap="outerHTML"
+        />
+        Active
+      </label>
+    </div>
+  );
+}
+
+export async function PUT(req: Request) {
+  const formData = await req.formData();
+  const userId = formData.get("userId") as string;
+  const isActive = formData.get("isActive") === "true";
+
+  if (!userId) {
+    return new Response("User ID is required", { status: 400 });
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { isActive },
+  });
+
+  return <UserRow user={updatedUser} />;
+}
+
 export default async function HomePage() {
   const members = await prisma.user.findMany({});
 
@@ -93,7 +129,7 @@ export default async function HomePage() {
         <button type="submit">Submit</button>
       </form>
       {members.map((member) => (
-        <div key={member.id}>{member.email}</div>
+        <UserRow key={member.id} user={member} />
       ))}
     </div>
   );
