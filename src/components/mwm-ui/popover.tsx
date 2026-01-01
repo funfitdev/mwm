@@ -28,7 +28,9 @@ function Popover({ children }: PopoverProps) {
 
   return (
     <PopoverContext.Provider value={{ popoverId, anchorName }}>
-      {children}
+      <div data-slot="popover" className="relative">
+        {children}
+      </div>
     </PopoverContext.Provider>
   );
 }
@@ -74,7 +76,7 @@ function PopoverTrigger({
 }
 
 interface PopoverContentProps
-  extends React.DialogHTMLAttributes<HTMLDialogElement> {
+  extends React.HTMLAttributes<HTMLDivElement> {
   /** The preferred side of the anchor to render against */
   side?: "top" | "right" | "bottom" | "left";
   /** The distance in pixels from the anchor */
@@ -95,91 +97,26 @@ function PopoverContent({
   style,
   ...props
 }: PopoverContentProps) {
-  const { popoverId, anchorName } = usePopoverContext();
-
-  // Build position styles based on side and align
-  const getPositionStyles = (): React.CSSProperties => {
-    const styles: React.CSSProperties = {
-      position: "absolute",
-      positionAnchor: anchorName,
-      margin: 0,
-    } as React.CSSProperties;
-
-    // Side positioning
-    switch (side) {
-      case "top":
-        (styles as any).bottom = `anchor(top)`;
-        (styles as any).marginBottom = `${sideOffset}px`;
-        break;
-      case "bottom":
-        (styles as any).top = `anchor(bottom)`;
-        (styles as any).marginTop = `${sideOffset}px`;
-        break;
-      case "left":
-        (styles as any).right = `anchor(left)`;
-        (styles as any).marginRight = `${sideOffset}px`;
-        break;
-      case "right":
-        (styles as any).left = `anchor(right)`;
-        (styles as any).marginLeft = `${sideOffset}px`;
-        break;
-    }
-
-    // Alignment positioning
-    if (side === "top" || side === "bottom") {
-      switch (align) {
-        case "start":
-          (styles as any).left = `anchor(left)`;
-          if (alignOffset) (styles as any).marginLeft = `${alignOffset}px`;
-          break;
-        case "center":
-          (styles as any).left = `anchor(center)`;
-          (styles as any).transform = "translateX(-50%)";
-          break;
-        case "end":
-          (styles as any).right = `anchor(right)`;
-          if (alignOffset) (styles as any).marginRight = `${alignOffset}px`;
-          break;
-      }
-    } else {
-      switch (align) {
-        case "start":
-          (styles as any).top = `anchor(top)`;
-          if (alignOffset) (styles as any).marginTop = `${alignOffset}px`;
-          break;
-        case "center":
-          (styles as any).top = `anchor(center)`;
-          (styles as any).transform = "translateY(-50%)";
-          break;
-        case "end":
-          (styles as any).bottom = `anchor(bottom)`;
-          if (alignOffset) (styles as any).marginBottom = `${alignOffset}px`;
-          break;
-      }
-    }
-
-    return styles;
-  };
-
   return (
-    <dialog
-      id={popoverId}
-      popover="auto"
+    <div
       data-slot="popover-content"
       data-side={side}
       data-align={align}
+      data-side-offset={sideOffset}
+      data-align-offset={alignOffset}
+      data-state="closed"
       className={cn(
-        "bg-popover text-popover-foreground z-50 w-72 rounded-md border p-4 shadow-md outline-none",
+        "bg-popover text-popover-foreground absolute z-50 w-72 rounded-md border p-4 shadow-md outline-none",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
-      style={{
-        ...getPositionStyles(),
-        ...style,
-      }}
+      style={{ display: "none", ...style }}
       {...props}
     >
       {children}
-    </dialog>
+    </div>
   );
 }
 

@@ -11,6 +11,8 @@ interface ToggleGroupProps
   value?: string | string[];
   defaultValue?: string | string[];
   spacing?: number;
+  /** Name for hidden input to store state */
+  name?: string;
 }
 
 function ToggleGroup({
@@ -21,9 +23,19 @@ function ToggleGroup({
   type = "single",
   value,
   defaultValue,
+  name,
   children,
   ...props
 }: ToggleGroupProps) {
+  // Calculate initial value for hidden input
+  const initialValue = value ?? defaultValue;
+  const hiddenValue =
+    type === "multiple" && Array.isArray(initialValue)
+      ? JSON.stringify(initialValue)
+      : typeof initialValue === "string"
+        ? initialValue
+        : "";
+
   return (
     <div
       role="group"
@@ -32,6 +44,7 @@ function ToggleGroup({
       data-size={size}
       data-spacing={spacing}
       data-type={type}
+      data-name={name}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
         "group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=0]:data-[variant=outline]:shadow-xs",
@@ -39,6 +52,7 @@ function ToggleGroup({
       )}
       {...props}
     >
+      {name && <input type="hidden" name={name} defaultValue={hiddenValue} />}
       {React.Children.map(children, (child) => {
         if (React.isValidElement<ToggleGroupItemProps>(child)) {
           return React.cloneElement(child, {

@@ -3,33 +3,34 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Default tab value to show */
+  /** Default tab value to show when no URL param exists */
   defaultValue?: string;
-  /** Name for the radio group (auto-generated if not provided) */
+  /** Name for hidden input and URL query param (defaults to "tab") */
   name?: string;
 }
 
 function Tabs({
   className,
   defaultValue,
-  name,
+  name = "tab",
   children,
   ...props
 }: TabsProps) {
-  const tabsName = name || React.useId().replace(/:/g, "");
-
   return (
     <div
       data-slot="tabs"
+      data-name={name}
+      data-default-value={defaultValue}
       className={cn("flex flex-col gap-2", className)}
       {...props}
     >
+      <input type="hidden" name={name} defaultValue={defaultValue} />
       {React.Children.map(children, (child) => {
-        if (React.isValidElement<TabsListProps | TabsContentProps>(child)) {
+        if (React.isValidElement<TabsListProps>(child)) {
           return React.cloneElement(child, {
-            _tabsName: tabsName,
+            _tabsName: name,
             _defaultValue: defaultValue,
-          } as Partial<TabsListProps | TabsContentProps>);
+          } as Partial<TabsListProps>);
         }
         return child;
       })}
@@ -74,7 +75,8 @@ function TabsList({
   );
 }
 
-interface TabsTriggerProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
+interface TabsTriggerProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   value: string;
   /** Internal: passed from TabsList */
   _tabsName?: string;
@@ -90,76 +92,24 @@ function TabsTrigger({
   _defaultValue,
   ...props
 }: TabsTriggerProps) {
-  const inputId = `${_tabsName}-${value}`;
-
   return (
-    <label
+    <button
+      type="button"
+      role="tab"
       data-slot="tabs-trigger"
-      htmlFor={inputId}
-      className={cn(
-        "has-[:checked]:bg-background dark:has-[:checked]:text-foreground focus-within:border-ring focus-within:ring-ring/50 focus-within:outline-ring dark:has-[:checked]:border-input dark:has-[:checked]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-within:ring-[3px] focus-within:outline-1 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50 has-[:checked]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
-      {...props}
-    >
-      <input
-        type="radio"
-        name={_tabsName}
-        value={value}
-        id={inputId}
-        defaultChecked={_defaultValue === value}
-        className="sr-only"
-      />
-      {children}
-    </label>
-  );
-}
-
-interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
-  value: string;
-  /** Internal: passed from Tabs */
-  _tabsName?: string;
-  /** Internal: passed from Tabs */
-  _defaultValue?: string;
-}
-
-function TabsContent({
-  className,
-  value,
-  _tabsName,
-  _defaultValue,
-  ...props
-}: TabsContentProps) {
-  const inputId = `${_tabsName}-${value}`;
-
-  return (
-    <div
-      data-slot="tabs-content"
       data-value={value}
+      data-state={_defaultValue === value ? "active" : "inactive"}
+      aria-selected={_defaultValue === value}
       className={cn(
-        "hidden flex-1 outline-none",
-        `has-[input#${inputId}:checked]:block [&:has(input#${inputId}:checked)]:block`,
+        "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
     >
-      {/* Hidden input to check state via CSS :has() - this is a fallback approach */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            [data-slot="tabs"]:has(input[name="${_tabsName}"][value="${value}"]:checked) [data-slot="tabs-content"][data-value="${value}"] {
-              display: block;
-            }
-            [data-slot="tabs"]:has(input[name="${_tabsName}"][value="${value}"]:not(:checked)) [data-slot="tabs-content"][data-value="${value}"] {
-              display: none;
-            }
-          `,
-        }}
-      />
-      {props.children}
-    </div>
+      {children}
+    </button>
   );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent };
-export type { TabsProps, TabsListProps, TabsTriggerProps, TabsContentProps };
+export { Tabs, TabsList, TabsTrigger };
+export type { TabsProps, TabsListProps, TabsTriggerProps };

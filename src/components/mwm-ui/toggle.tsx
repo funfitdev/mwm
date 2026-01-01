@@ -30,6 +30,8 @@ interface ToggleProps
     VariantProps<typeof toggleVariants> {
   pressed?: boolean;
   defaultPressed?: boolean;
+  /** Name for hidden input to store state */
+  name?: string;
 }
 
 function Toggle({
@@ -38,19 +40,26 @@ function Toggle({
   size,
   pressed,
   defaultPressed,
+  name,
+  children,
   ...props
 }: ToggleProps) {
+  const isPressed = pressed ?? defaultPressed ?? false;
   return (
     <button
       type="button"
       data-slot="toggle"
-      data-state={pressed ? "on" : "off"}
+      data-state={isPressed ? "on" : "off"}
       data-variant={variant}
       data-size={size}
-      aria-pressed={pressed ?? defaultPressed}
+      data-name={name}
+      aria-pressed={isPressed}
       className={cn(toggleVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {name && <input type="hidden" name={name} value={isPressed ? "true" : "false"} />}
+      {children}
+    </button>
   );
 }
 

@@ -1,4 +1,10 @@
-import { computePosition, flip, shift, offset, Placement } from "@floating-ui/dom";
+import {
+  computePosition,
+  flip,
+  shift,
+  offset,
+  type Placement,
+} from "@floating-ui/dom";
 
 function getPlacement(content: HTMLElement): Placement {
   const side = content.dataset.side || "bottom";
@@ -95,7 +101,9 @@ function initDropdown(container: HTMLElement) {
   // Close on item click if data-close-on-click is not "false"
   content.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
-    const item = target.closest<HTMLElement>('[data-slot="dropdown-menu-item"]');
+    const item = target.closest<HTMLElement>(
+      '[data-slot="dropdown-menu-item"]'
+    );
     if (item && item.dataset.closeOnClick !== "false") {
       closeDropdown(container);
     }
@@ -111,7 +119,9 @@ function initDropdown(container: HTMLElement) {
 }
 
 function initAllDropdowns() {
-  const dropdowns = document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu"]');
+  const dropdowns = document.querySelectorAll<HTMLElement>(
+    '[data-slot="dropdown-menu"]'
+  );
   console.log("[MWM] Found", dropdowns.length, "dropdown menus");
   dropdowns.forEach(initDropdown);
 }
