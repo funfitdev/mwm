@@ -106,6 +106,7 @@ import {
   type RequestContext,
   type AuthSession,
 } from "@/lib/context";
+import { getAuthSessionFromRequest } from "@/lib/context";
 import { OutletProvider } from "@/components/outlet";
 
 // Import route modules
@@ -117,17 +118,26 @@ ${layoutImportsCode}
 // HTTP method handler type
 type MethodHandler = (req: Request) => Response | React.ReactElement | Promise<Response | React.ReactElement>;
 
-// Route module type
+// Route module type - default can now return Response or React component
 type RouteModule = {
-  default?: React.ComponentType;
+  default?: React.ComponentType | MethodHandler;
   GET?: React.ComponentType | MethodHandler;
   POST?: MethodHandler;
   PUT?: MethodHandler;
   DELETE?: MethodHandler;
 };
 
-// Layout component type
-type LayoutComponent = React.ComponentType;
+// Layout component type - can be a React component or a handler that returns Response/Element
+type LayoutComponent =
+  | React.ComponentType
+  | ((req: Request) => Response | React.ReactElement | Promise<Response | React.ReactElement>);
+
+// Check if layout is a handler function (takes request parameter)
+function isLayoutHandler(
+  layout: LayoutComponent
+): layout is (req: Request) => Response | React.ReactElement | Promise<Response | React.ReactElement> {
+  return typeof layout === "function" && layout.length > 0;
+}
 
 // Bun route handler type
 type BunRouteHandler =
@@ -139,18 +149,9 @@ type BunRouteHandler =
       DELETE?: (req: Request) => Response | Promise<Response>;
     };
 
-// Get auth session from request (implement your actual auth logic here)
-async function getAuthSession(_req: Request): Promise<AuthSession> {
-  // TODO: Implement actual session lookup from cookies/headers
-  // Example:
-  // const sessionToken = req.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
-  // if (sessionToken) {
-  //   const session = await prisma.session.findUnique({ where: { token: sessionToken }, include: { user: true } });
-  //   if (session && session.expiresAt > new Date()) {
-  //     return { userId: session.userId, user: session.user, isAuthenticated: true };
-  //   }
-  // }
-  return createGuestSession();
+// Get auth session from request cookies (async - validates against DB)
+async function getAuthSession(req: Request): Promise<AuthSession> {
+  return getAuthSessionFromRequest(req);
 }
 
 // Create request context for a request
@@ -173,19 +174,48 @@ function isPartialRequest(req: Request): boolean {
 }
 
 // Wrap content with layouts (innermost to outermost)
-function wrapWithLayouts(
+// Returns Response if any layout throws/returns Response, otherwise returns wrapped element
+async function wrapWithLayouts(
   content: React.ReactElement,
-  layouts: LayoutComponent[]
-): React.ReactElement {
+  layouts: LayoutComponent[],
+  req: Request
+): Promise<Response | React.ReactElement> {
   let wrapped = content;
   // Apply layouts from innermost (last) to outermost (first)
   for (let i = layouts.length - 1; i >= 0; i--) {
-    const Layout = layouts[i]!;
-    wrapped = (
-      <OutletProvider content={wrapped}>
-        <Layout />
-      </OutletProvider>
-    );
+    const layout = layouts[i]!;
+
+    if (isLayoutHandler(layout)) {
+      // Layout is a handler function - call it and check result
+      // May throw Response (e.g., redirect for auth)
+      try {
+        const result = await layout(req);
+        if (result instanceof Response) {
+          // Layout returned a Response (e.g., redirect) - return it immediately
+          return result;
+        }
+        // Layout returned a React element - wrap it with outlet
+        wrapped = (
+          <OutletProvider content={wrapped}>
+            {result}
+          </OutletProvider>
+        );
+      } catch (e) {
+        // Support throwing Response for redirects
+        if (e instanceof Response) {
+          return e;
+        }
+        throw e;
+      }
+    } else {
+      // Layout is a React component
+      const Layout = layout;
+      wrapped = (
+        <OutletProvider content={wrapped}>
+          <Layout />
+        </OutletProvider>
+      );
+    }
   }
   return wrapped;
 }
@@ -194,13 +224,19 @@ function wrapWithLayouts(
 async function renderComponent(
   Component: React.ComponentType,
   partial: boolean,
-  layouts: LayoutComponent[] = []
+  layouts: LayoutComponent[] = [],
+  req?: Request
 ): Promise<Response> {
   let element: React.ReactElement = <Component />;
 
   // Wrap with layouts if any
-  if (layouts.length > 0) {
-    element = wrapWithLayouts(element, layouts);
+  if (layouts.length > 0 && req) {
+    const wrapped = await wrapWithLayouts(element, layouts, req);
+    if (wrapped instanceof Response) {
+      // A layout returned a Response (e.g., redirect for auth)
+      return wrapped;
+    }
+    element = wrapped;
   }
 
   // Wrap with Root for full page requests
@@ -221,6 +257,13 @@ function isReactComponent(
   return typeof handler === "function" && handler.length === 0;
 }
 
+// Check if a handler is a method handler (takes request parameter)
+function isMethodHandler(
+  handler: React.ComponentType | MethodHandler
+): handler is MethodHandler {
+  return typeof handler === "function" && handler.length > 0;
+}
+
 // Create a route handler that supports all HTTP methods
 function createRouteHandler(
   module: RouteModule,
@@ -234,7 +277,20 @@ function createRouteHandler(
       const ctx = await createRequestContext(req);
       return runWithContext(ctx, async () => {
         const partial = isPartialRequest(req);
-        return renderComponent(module.default!, partial, layouts);
+
+        // Check if default is a handler function vs component
+        const defaultExport = module.default!;
+        if (isMethodHandler(defaultExport)) {
+          // It's a handler function that takes request
+          const result = await defaultExport(req);
+          if (result instanceof Response) {
+            return result;
+          }
+          return renderComponent(() => result, partial, layouts, req);
+        }
+
+        // It's a React component
+        return renderComponent(defaultExport as React.ComponentType, partial, layouts, req);
       });
     };
   }
@@ -252,30 +308,39 @@ function createRouteHandler(
         // If partial request and GET export exists, use it
         if (partial && module.GET) {
           if (isReactComponent(module.GET)) {
-            return renderComponent(module.GET, true, layouts);
+            return renderComponent(module.GET, true, layouts, req);
           }
           const result = await module.GET(req);
           if (result instanceof Response) {
             return result;
           }
-          return renderComponent(() => result, true, layouts);
+          return renderComponent(() => result, true, layouts, req);
         }
 
         // Full page request - use default export
         if (module.default) {
-          return renderComponent(module.default, false, layouts);
+          // Check if default is a handler function vs component
+          const defaultExport = module.default;
+          if (isMethodHandler(defaultExport)) {
+            const result = await defaultExport(req);
+            if (result instanceof Response) {
+              return result;
+            }
+            return renderComponent(() => result, false, layouts, req);
+          }
+          return renderComponent(defaultExport as React.ComponentType, false, layouts, req);
         }
 
         // Fallback to GET if no default
         if (module.GET) {
           if (isReactComponent(module.GET)) {
-            return renderComponent(module.GET, partial, layouts);
+            return renderComponent(module.GET, partial, layouts, req);
           }
           const result = await module.GET(req);
           if (result instanceof Response) {
             return result;
           }
-          return renderComponent(() => result, partial, layouts);
+          return renderComponent(() => result, partial, layouts, req);
         }
 
         return new Response("Not Found", { status: 404 });
@@ -293,7 +358,7 @@ function createRouteHandler(
           return result;
         }
         // Result is a React element, render it as partial
-        return renderComponent(() => result, true, layouts);
+        return renderComponent(() => result, true, layouts, req);
       });
     };
   }
@@ -308,7 +373,7 @@ function createRouteHandler(
           return result;
         }
         // Result is a React element, render it as partial
-        return renderComponent(() => result, true, layouts);
+        return renderComponent(() => result, true, layouts, req);
       });
     };
   }
@@ -323,7 +388,7 @@ function createRouteHandler(
           return result;
         }
         // Result is a React element, render it as partial
-        return renderComponent(() => result, true, layouts);
+        return renderComponent(() => result, true, layouts, req);
       });
     };
   }

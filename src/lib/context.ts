@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "async_hooks";
+import { sessionManager, type SessionData } from "./session";
 
 // Auth session type - expand as needed based on your auth system
 export type AuthSession = {
@@ -75,5 +76,45 @@ export function createGuestSession(): AuthSession {
     userId: null,
     user: null,
     isAuthenticated: false,
+  };
+}
+
+// Create auth session from cookie session data
+export function createAuthSessionFromCookie(
+  sessionData: SessionData | null
+): AuthSession {
+  if (!sessionData) {
+    return createGuestSession();
+  }
+
+  return {
+    userId: sessionData.userId,
+    user: {
+      id: sessionData.userId,
+      email: sessionData.email,
+      name: sessionData.name,
+      avatarUrl: sessionData.avatarUrl,
+    },
+    isAuthenticated: true,
+  };
+}
+
+// Get auth session from request cookies (async - validates against DB)
+export async function getAuthSessionFromRequest(req: Request): Promise<AuthSession> {
+  const sessionData = await sessionManager.getSession(req);
+  return createAuthSessionFromCookie(sessionData);
+}
+
+// Get auth session from request cookies (sync - checks cookie only, no DB validation)
+export function getAuthSessionFromRequestSync(req: Request): AuthSession {
+  const hasSession = sessionManager.getSessionSync(req);
+  if (!hasSession) {
+    return createGuestSession();
+  }
+  // Return a placeholder session - actual user data needs async DB lookup
+  return {
+    userId: null,
+    user: null,
+    isAuthenticated: true, // Cookie exists but user data not loaded
   };
 }

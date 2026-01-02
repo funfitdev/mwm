@@ -1,10 +1,11 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { SectionCards } from "@/components/section-cards";
-import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/mwm-ui/sidebar";
 import { Outlet } from "@/components/outlet";
+import { requireAuthAsync } from "@/lib/session";
 
-export default function UsersLayout() {
+export default async function CmsLayout(req: Request) {
+  await requireAuthAsync(req);
+
   return (
     <SidebarProvider
       style={

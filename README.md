@@ -19,6 +19,7 @@
 bunx --bun prisma migrate dev --name init
 bunx --bun prisma generate
 
+bunx prisma db seed
 bunx --bun prisma migrate deploy
 ```
 
