@@ -4,6 +4,52 @@ import { resolve } from "path";
 
 const projectRoot = resolve(import.meta.dir, "..");
 
+// Content-Type mapping for static files
+const mimeTypes: Record<string, string> = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".otf": "font/otf",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain",
+};
+
+// Generate static file routes from public directory
+async function generateStaticRoutes(): Promise<string[]> {
+  const glob = new Glob("**/*");
+  const publicDir = resolve(projectRoot, "public");
+  const staticFiles: string[] = [];
+
+  for await (const file of glob.scan(publicDir)) {
+    // Skip directories (only process files)
+    const filePath = resolve(publicDir, file);
+    const stat = await Bun.file(filePath).exists();
+    if (!stat) continue;
+
+    // Get the URL path (e.g., "styles.css" -> "/styles.css")
+    const urlPath = "/" + file;
+    staticFiles.push(urlPath);
+  }
+
+  return staticFiles;
+}
+
 // Generate routes with full routing logic (context, HTTP methods, partials)
 async function generateRoutes() {
   const glob = new Glob("**/*.tsx");
@@ -97,6 +143,18 @@ async function generateRoutes() {
     })
     .join("\n");
 
+  // Generate static file routes
+  const staticFiles = await generateStaticRoutes();
+
+  const staticRoutesCode = staticFiles
+    .map((urlPath) => {
+      const ext = urlPath.substring(urlPath.lastIndexOf("."));
+      const mimeType = mimeTypes[ext] || "application/octet-stream";
+      const filePath = `./public${urlPath}`;
+      return `  "${urlPath}": createStaticHandler("${filePath}", "${mimeType}"),`;
+    })
+    .join("\n");
+
   const content = `// Auto-generated - do not edit
 import { renderToReadableStream } from "react-dom/server";
 import Root from "./routes/__Root";
@@ -108,6 +166,21 @@ import {
 } from "@/lib/context";
 import { getAuthSessionFromRequest } from "@/lib/context";
 import { OutletProvider } from "@/components/outlet";
+
+const isDev = process.env.NODE_ENV !== "production";
+
+// Static file handler
+function createStaticHandler(filePath: string, contentType: string) {
+  return () =>
+    new Response(Bun.file(filePath), {
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": isDev
+          ? "no-cache"
+          : "public, max-age=31536000, immutable",
+      },
+    });
+}
 
 // Import route modules
 ${imports}
@@ -396,7 +469,13 @@ function createRouteHandler(
   return handlers;
 }
 
+// Static file routes
+export const staticRoutes: Record<string, () => Response> = {
+${staticRoutesCode}
+};
+
 export const routes: Record<string, BunRouteHandler> = {
+  ...staticRoutes,
 ${routeEntries}
 };
 
@@ -479,7 +558,7 @@ export async function handleUIRoutes(req: Request): Promise<Response | null> {
 `;
 
   await Bun.write(import.meta.dir + "/../src/routes.generated.tsx", content);
-  console.log(`✓ Generated ${routes.length} routes`);
+  console.log(`✓ Generated ${routes.length} routes, ${staticFiles.length} static files`);
 }
 
 // Build Tailwind CSS
@@ -562,7 +641,7 @@ async function dev() {
   await Bun.sleep(500);
 
   console.log("🔥 Starting Bun server with hot reload...\n");
-  const server = Bun.spawn(["bun", "--hot", "./index.tsx"], {
+  const server = Bun.spawn(["bun", "--hot", "./server.tsx"], {
     cwd: projectRoot,
     stdout: "inherit",
     stderr: "inherit",
@@ -590,7 +669,7 @@ async function build() {
   await tailwind.exited;
   console.log("✓ Built CSS");
 
-  await $`cd ${projectRoot} && bun build ./index.tsx --compile --outfile=dist/server`;
+  await $`cd ${projectRoot} && bun build ./server.tsx --compile --outfile=dist/server`;
   console.log("✓ Compiled server binary");
 
   console.log("\n✅ Build complete! Run with: ./dist/server");

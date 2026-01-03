@@ -25,4 +25,5 @@ bunx prisma migrate deploy
 ```
 statics
 middleware
+
 ```

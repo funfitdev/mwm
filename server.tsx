@@ -12,26 +12,6 @@ const server = Bun.serve({
     "/api/*": handleAPI,
     // OpenAPI spec
     "/openapi.json": () => Response.json(getOpenAPISpec()),
-    "/favicon.ico": Bun.file("./favicon.ico"),
-    // Static assets with caching
-    "/styles.css": () =>
-      new Response(Bun.file("./public/styles.css"), {
-        headers: {
-          "Content-Type": "text/css",
-          "Cache-Control": isDev
-            ? "no-cache"
-            : "public, max-age=31536000, immutable",
-        },
-      }),
-    "/bundle.js": () =>
-      new Response(Bun.file("./public/bundle.js"), {
-        headers: {
-          "Content-Type": "application/javascript",
-          "Cache-Control": isDev
-            ? "no-cache"
-            : "public, max-age=31536000, immutable",
-        },
-      }),
   },
   fetch(req, server) {
     // Handle live reload WebSocket upgrade in dev mode

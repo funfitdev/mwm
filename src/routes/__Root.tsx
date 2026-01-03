@@ -13,8 +13,15 @@ export default function Root({ children }: { children: React.ReactNode }) {
     <html>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>mwm App</title>
+        <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no"
+        />
+        <link rel="manifest" href="/site.webmanifest" />
+        <link rel="apple-touch-icon" href="/apple-icon-180.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <title>mwm</title>
         <link rel="stylesheet" href="/styles.css" />
         <script src="/bundle.js" defer></script>
         {isDev && (
