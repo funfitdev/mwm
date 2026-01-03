@@ -16,7 +16,7 @@
   "private": true,
   "scripts": {
     "dev": "bun scripts/cli.ts dev",
-    "build": "bun scripts/cli.ts build",
+    "build": "NODE_ENV=production bun scripts/cli.ts build",
     "start": "./dist/server",
     "db:seed": "bun prisma/seed.ts",
     "db:migrate": "bunx prisma migrate dev",

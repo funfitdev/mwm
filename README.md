@@ -4,6 +4,8 @@
 - logging
 - blob storage
 - Role and permission management UI | Org Level, Super Level
+- /blog
+- /pages
 
 - mwm
 - /identity @mwm/identity
@@ -26,4 +28,8 @@ bunx prisma migrate deploy
 statics
 middleware
 
+storage
+email
+password reset
+login with Google
 ```

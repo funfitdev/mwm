@@ -669,7 +669,24 @@ async function build() {
   await tailwind.exited;
   console.log("✓ Built CSS");
 
-  await $`cd ${projectRoot} && bun build ./server.tsx --compile --outfile=dist/server`;
+  // Build server with production JSX runtime
+  const result = await Bun.build({
+    entrypoints: [resolve(projectRoot, "server.tsx")],
+    outdir: resolve(projectRoot, "dist"),
+    target: "bun",
+    minify: true,
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+  });
+
+  if (!result.success) {
+    console.error("Server build failed:", result.logs);
+    process.exit(1);
+  }
+
+  // Compile the bundled output to a standalone binary
+  await $`cd ${projectRoot} && bun build ./dist/server.js --compile --outfile=dist/server`;
   console.log("✓ Compiled server binary");
 
   console.log("\n✅ Build complete! Run with: ./dist/server");
