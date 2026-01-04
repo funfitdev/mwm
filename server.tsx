@@ -2,16 +2,18 @@ import { handleAPI, getOpenAPISpec } from "./src/api";
 // Use generated routes for production builds (static imports)
 // For dev, this file is generated before the build
 import { routes } from "./src/routes.generated";
+import { withMiddleware } from "./src/lib/middleware";
 
 const isDev = process.env.NODE_ENV !== "production";
 
 const server = Bun.serve({
   routes: {
+    // Generated routes (already wrapped with middleware)
     ...routes,
     // REST API routes (OpenAPI) - handles /api/health, /api/users/*, /api/posts/*, /api/echo
-    "/api/*": handleAPI,
+    "/api/*": withMiddleware(handleAPI),
     // OpenAPI spec
-    "/openapi.json": () => Response.json(getOpenAPISpec()),
+    "/openapi.json": withMiddleware(() => Response.json(getOpenAPISpec())),
   },
   fetch(req, server) {
     // Handle live reload WebSocket upgrade in dev mode

@@ -168,6 +168,7 @@ import {
 } from "@/lib/context";
 import { getAuthSessionFromRequest } from "@/lib/context";
 import { OutletProvider } from "@/components/outlet";
+import { withMiddleware } from "@/lib/middleware";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -475,14 +476,35 @@ function createRouteHandler(
   return handlers;
 }
 
-// Static file routes
-export const staticRoutes: Record<string, () => Response> = {
-${staticRoutesCode}
+// Wrap a single handler or method object with middleware
+function wrapHandler(handler: BunRouteHandler): BunRouteHandler {
+  if (typeof handler === "function") {
+    return withMiddleware(handler);
+  }
+  // Handler is an object with method handlers
+  return Object.fromEntries(
+    Object.entries(handler).map(([method, methodHandler]) => [
+      method,
+      withMiddleware(methodHandler as (req: Request) => Response | Promise<Response>),
+    ])
+  ) as BunRouteHandler;
+}
+
+// Static file routes (wrapped with middleware)
+export const staticRoutes: Record<string, (req: Request) => Response | Promise<Response>> = {
+${staticRoutesCode.split('\n').map(line => {
+    // Transform: "path": createStaticHandler(...), -> "path": withMiddleware(createStaticHandler(...)),
+    return line.replace(/^(  ".*": )(createStaticHandler\(.*\)),/, '$1withMiddleware($2),');
+  }).join('\n')}
 };
 
+// All routes wrapped with middleware
 export const routes: Record<string, BunRouteHandler> = {
   ...staticRoutes,
-${routeEntries}
+${routeEntries.split('\n').map(line => {
+    // Transform: "path": createRouteHandler(...), -> "path": wrapHandler(createRouteHandler(...)),
+    return line.replace(/^(  ".*": )(createRouteHandler\(.*\)),/, '$1wrapHandler($2),');
+  }).join('\n')}
 };
 
 // Match a URL path against a route pattern with :param segments
