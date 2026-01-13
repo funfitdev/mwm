@@ -644,6 +644,22 @@ async function buildJS(watchMode = false) {
   }
 }
 
+// Kill a process and all its children
+async function killProcessTree(proc: ReturnType<typeof Bun.spawn>) {
+  const pid = proc.pid;
+  try {
+    // Use pkill to kill process tree on macOS/Linux
+    await $`pkill -P ${pid}`.quiet();
+  } catch {
+    // pkill may fail if no children exist, that's ok
+  }
+  try {
+    proc.kill("SIGTERM");
+  } catch {
+    // Process may already be dead
+  }
+}
+
 // Dev mode
 async function dev() {
   console.log("🚀 Starting development server...\n");
@@ -675,13 +691,16 @@ async function dev() {
     stderr: "inherit",
   });
 
-  process.on("SIGINT", () => {
+  const cleanup = async () => {
     console.log("\n👋 Shutting down...");
     watcher.close();
-    tailwind.kill();
-    server.kill();
+    await killProcessTree(tailwind);
+    await killProcessTree(server);
     process.exit(0);
-  });
+  };
+
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
 
   await server.exited;
 }

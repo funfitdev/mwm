@@ -1,9 +1,6 @@
 # mwm
 
-- move api to routes folder
-- logging
 - file storage
-- create auto routes
 - make params available via (req,params)
 - Role and permission management UI | Org Level, Super Level
 - Ai Response Streaming
@@ -35,4 +32,18 @@ storage
 email
 password reset
 login with Google
+```
+
+### Guidance
+
+- 1-3 fields Dialog
+- 3-8 fields Sheet
+- Wizard or 8+ fields separate page
+
+```
+system roles
+
+admin
+org_admin
+guest
 ```
