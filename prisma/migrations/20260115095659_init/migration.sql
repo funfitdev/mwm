@@ -4,12 +4,6 @@ CREATE SCHEMA IF NOT EXISTS "auth";
 -- CreateEnum
 CREATE TYPE "auth"."VerificationTokenType" AS ENUM ('EMAIL_VERIFICATION', 'PASSWORD_RESET', 'MAGIC_LINK', 'TWO_FACTOR');
 
--- CreateEnum
-CREATE TYPE "OrganizationStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'PENDING');
-
--- CreateEnum
-CREATE TYPE "InviteStatus" AS ENUM ('PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED');
-
 -- CreateTable
 CREATE TABLE "auth"."User" (
     "id" TEXT NOT NULL,
@@ -134,61 +128,6 @@ CREATE TABLE "UserRole" (
 );
 
 -- CreateTable
-CREATE TABLE "Organization" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
-    "description" TEXT,
-    "logoUrl" TEXT,
-    "website" TEXT,
-    "ownerId" TEXT NOT NULL,
-    "status" "OrganizationStatus" NOT NULL DEFAULT 'ACTIVE',
-    "settings" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Organization_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "OrganizationMember" (
-    "id" TEXT NOT NULL,
-    "orgId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "createdBy" TEXT,
-    "updatedBy" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "OrganizationMember_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "OrganizationRole" (
-    "id" TEXT NOT NULL,
-    "orgId" TEXT NOT NULL,
-    "roleId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "OrganizationRole_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "OrganizationInvite" (
-    "id" TEXT NOT NULL,
-    "orgId" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "roleId" TEXT,
-    "token" TEXT NOT NULL,
-    "status" "InviteStatus" NOT NULL DEFAULT 'PENDING',
-    "expiresAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "OrganizationInvite_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "ApiKey" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -219,14 +158,6 @@ CREATE TABLE "AuditLog" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "_MemberRoles" (
-    "A" TEXT NOT NULL,
-    "B" TEXT NOT NULL,
-
-    CONSTRAINT "_MemberRoles_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateIndex
@@ -302,42 +233,6 @@ CREATE INDEX "UserRole_userId_idx" ON "UserRole"("userId");
 CREATE UNIQUE INDEX "UserRole_userId_roleId_key" ON "UserRole"("userId", "roleId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Organization_slug_key" ON "Organization"("slug");
-
--- CreateIndex
-CREATE INDEX "Organization_slug_idx" ON "Organization"("slug");
-
--- CreateIndex
-CREATE INDEX "Organization_ownerId_idx" ON "Organization"("ownerId");
-
--- CreateIndex
-CREATE INDEX "OrganizationMember_orgId_idx" ON "OrganizationMember"("orgId");
-
--- CreateIndex
-CREATE INDEX "OrganizationMember_userId_idx" ON "OrganizationMember"("userId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OrganizationMember_orgId_userId_key" ON "OrganizationMember"("orgId", "userId");
-
--- CreateIndex
-CREATE INDEX "OrganizationRole_orgId_idx" ON "OrganizationRole"("orgId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OrganizationRole_orgId_roleId_key" ON "OrganizationRole"("orgId", "roleId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OrganizationInvite_token_key" ON "OrganizationInvite"("token");
-
--- CreateIndex
-CREATE INDEX "OrganizationInvite_token_idx" ON "OrganizationInvite"("token");
-
--- CreateIndex
-CREATE INDEX "OrganizationInvite_email_idx" ON "OrganizationInvite"("email");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OrganizationInvite_orgId_email_key" ON "OrganizationInvite"("orgId", "email");
-
--- CreateIndex
 CREATE UNIQUE INDEX "ApiKey_keyHash_key" ON "ApiKey"("keyHash");
 
 -- CreateIndex
@@ -360,9 +255,6 @@ CREATE INDEX "AuditLog_resource_resourceId_idx" ON "AuditLog"("resource", "resou
 
 -- CreateIndex
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
-
--- CreateIndex
-CREATE INDEX "_MemberRoles_B_index" ON "_MemberRoles"("B");
 
 -- AddForeignKey
 ALTER TABLE "auth"."Credential" ADD CONSTRAINT "Credential_userId_fkey" FOREIGN KEY ("userId") REFERENCES "auth"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -398,37 +290,7 @@ ALTER TABLE "UserRole" ADD CONSTRAINT "UserRole_userId_fkey" FOREIGN KEY ("userI
 ALTER TABLE "UserRole" ADD CONSTRAINT "UserRole_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Organization" ADD CONSTRAINT "Organization_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "auth"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationMember" ADD CONSTRAINT "OrganizationMember_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationMember" ADD CONSTRAINT "OrganizationMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "auth"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationMember" ADD CONSTRAINT "OrganizationMember_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "auth"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationMember" ADD CONSTRAINT "OrganizationMember_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "auth"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationRole" ADD CONSTRAINT "OrganizationRole_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationRole" ADD CONSTRAINT "OrganizationRole_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "OrganizationInvite" ADD CONSTRAINT "OrganizationInvite_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "ApiKey" ADD CONSTRAINT "ApiKey_userId_fkey" FOREIGN KEY ("userId") REFERENCES "auth"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "auth"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_MemberRoles" ADD CONSTRAINT "_MemberRoles_A_fkey" FOREIGN KEY ("A") REFERENCES "OrganizationMember"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_MemberRoles" ADD CONSTRAINT "_MemberRoles_B_fkey" FOREIGN KEY ("B") REFERENCES "OrganizationRole"("id") ON DELETE CASCADE ON UPDATE CASCADE;
