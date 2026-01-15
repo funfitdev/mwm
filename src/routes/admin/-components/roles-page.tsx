@@ -47,7 +47,6 @@ export function RolesPage({ roles, formState }: RolesPageProps) {
       <Page.Header>
         <div className="flex flex-1 items-center justify-between">
           <div className="flex items-center gap-2">
-            <IconShield className="size-5" />
             <h1 className="text-lg font-semibold">Roles</h1>
           </div>
           <Dialog defaultOpen={hasErrors}>

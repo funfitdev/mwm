@@ -1,0 +1,98 @@
+// =============================================================================
+// MULTI-TENANCY / ORGANIZATIONS
+// =============================================================================
+
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  description String?
+  logoUrl     String?
+  website     String?
+  ownerId     String
+  status      OrganizationStatus @default(ACTIVE)
+  settings    Json? // Flexible org-level settings
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  owner   User                 @relation("OrgOwner", fields: [ownerId], references: [id])
+  members OrganizationMember[]
+  roles   OrganizationRole[]
+  invites OrganizationInvite[]
+
+  @@index([slug])
+  @@index([ownerId])
+  @@schema("public")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+
+  @@schema("public")
+}
+
+model OrganizationMember {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creator      User?              @relation("OrgMemberCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?              @relation("OrgMemberUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  roles        OrganizationRole[] @relation("MemberRoles")
+
+  @@unique([orgId, userId])
+  @@index([orgId])
+  @@index([userId])
+  @@schema("public")
+}
+
+model OrganizationRole {
+  id        String   @id @default(cuid())
+  orgId     String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  role         Role                 @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  members      OrganizationMember[] @relation("MemberRoles")
+
+  @@unique([orgId, roleId])
+  @@index([orgId])
+  @@schema("public")
+}
+
+model OrganizationInvite {
+  id        String       @id @default(cuid())
+  orgId     String
+  email     String
+  roleId    String? // Role to assign on acceptance
+  token     String       @unique
+  status    InviteStatus @default(PENDING)
+  expiresAt DateTime
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, email])
+  @@index([token])
+  @@index([email])
+  @@schema("public")
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+
+  @@schema("public")
+}

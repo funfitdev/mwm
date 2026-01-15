@@ -1,0 +1,73 @@
+// =============================================================================
+// AUTHORIZATION - ROLE-BASED ACCESS CONTROL (RBAC)
+// =============================================================================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  displayName String
+  description String?
+  isSystem    Boolean  @default(false) // System roles can't be deleted
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     User?              @relation("RoleCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater     User?              @relation("RoleUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  orgRoles    OrganizationRole[]
+
+  @@index([name])
+  @@schema("public")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "users:read", "posts:write", "orders:delete"
+  displayName String
+  description String?
+  resource    String // e.g., "users", "posts", "orders"
+  action      String // e.g., "create", "read", "update", "delete", "manage"
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator         User?            @relation("PermissionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater         User?            @relation("PermissionUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+  @@index([name])
+  @@schema("public")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@schema("public")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@schema("public")
+}

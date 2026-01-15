@@ -41,3 +41,4 @@ src/components/ui
 /generated/prisma
 bundle.js
 generated
+dont-track.md
